@@ -1,4 +1,5 @@
---DROP TRIGGER IF EXISTS rangofechatrigger ON contrato;
+--------EJ 1---------
+DROP TRIGGER IF EXISTS rangofechatrigger ON contrato;
 DROP TRIGGER IF EXISTS nuevoresumentrigger ON contrato;
 DROP TABLE IF EXISTS contrato;
 DROP TABLE IF EXISTS resumencontrato;
@@ -105,7 +106,112 @@ $$ LANGUAGE plpgsql;
 -- Carga los datos de alquileres.csv desde el directorio actual en pampero
 \COPY contrato from 'alquileres2.csv' csv header delimiter ','
 
--------------- PRUEBA ---------------
 
-SELECT fechaDesde, fechaHasta, deptoId FROM contrato ORDER BY deptoId, fechaDesde;
-SELECT * FROM ResumenContrato ORDER BY deptoId;
+
+
+
+
+
+
+--------------EJ 2--------------------
+DROP TRIGGER IF EXISTS cambiopassword ON usuario;
+DROP TABLE IF EXISTS historialpassword;
+DROP TABLE IF EXISTS usuario CASCADE;
+DROP TABLE IF EXISTS rol CASCADE;
+DROP TABLE IF EXISTS roles;
+
+CREATE TABLE usuario
+(
+        Nombre TEXT NOT NULL,
+        Password TEXT,
+        
+        PRIMARY KEY(Nombre)
+);
+
+CREATE TABLE rol
+(
+        Nombre TEXT NOT NULL,
+        Nivel INTEGER CHECK(Nivel >= 0),
+        
+        PRIMARY KEY(Nombre)
+ );
+ 
+CREATE TABLE roles
+(
+        Usuario TEXT NOT NULL,
+        Rol TEXT NOT NULL,
+        
+        PRIMARY KEY(Usuario, Rol),
+        FOREIGN KEY(Usuario) REFERENCES usuario ON DELETE CASCADE,
+        FOREIGN KEY(Rol) REFERENCES rol ON DELETE CASCADE
+);
+
+CREATE TABLE historialpassword
+(
+        Usuario TEXT NOT NULL,
+        Password TEXT,
+        Fecha TIMESTAMP NOT NULL,
+        
+        PRIMARY KEY(Usuario, Fecha)
+);
+
+
+CREATE OR REPLACE FUNCTION triggerCambioPassword() RETURNS TRIGGER AS $$
+DECLARE SUMA int;
+MESSAGE TEXT;
+BEGIN
+        IF (new.password = old.password)
+        THEN RAISE EXCEPTION 'NEW PASSWORD SAME AS OLD PASSWORD' USING ERRCODE = 'PP001';
+        END IF;
+        SUMA := (SELECT sum(Nivel)
+            FROM rol, roles
+            WHERE rol.nombre = roles.rol
+            AND roles.usuario = old.nombre);
+        MESSAGE := CONCAT('CANNOT USE LAST ', SUMA, ' PASSWORD(S)');
+        IF  (((SELECT max(Nivel)
+            FROM rol,roles
+            WHERE rol.nombre = roles.rol
+            AND roles.usuario = old.nombre) >=1) 
+            AND (new.password in(
+            SELECT password 
+            FROM historialpassword 
+            ORDER BY Fecha DESC 
+            LIMIT SUMA)))
+        THEN RAISE EXCEPTION '%', MESSAGE USING ERRCODE = 'PP002';
+        ELSE
+        INSERT INTO historialpassword(Usuario, Password, Fecha) VALUES(old.nombre, old.password, CURRENT_TIMESTAMP);
+        RAISE NOTICE 'PASSWORD CHANGED SUCCESFULLY'; 
+        END IF;
+        RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER cambiopassword 
+BEFORE UPDATE ON usuario
+FOR EACH ROW 
+EXECUTE PROCEDURE triggerCambioPassword();
+
+INSERT INTO usuario VALUES ('jperez', 'pass1');
+INSERT INTO usuario VALUES ('mgomez', 'pass1');
+INSERT INTO usuario VALUES ('tbalbin', 'pass1');
+INSERT INTO usuario VALUES ('ucampos', 'pass1');
+
+INSERT INTO rol VALUES ('secretaria', 0);
+INSERT INTO rol VALUES ('gerente', 1);
+INSERT INTO rol VALUES ('revisor', 2);
+
+INSERT INTO roles VALUES ('jperez', 'secretaria');
+INSERT INTO roles VALUES ('mgomez', 'secretaria');
+INSERT INTO roles VALUES ('tbalbin', 'secretaria');
+INSERT INTO roles VALUES ('tbalbin', 'gerente');
+INSERT INTO roles VALUES ('ucampos', 'revisor');
+
+
+INSERT INTO historialpassword VALUES ('mgomez', 'pass2', '01/01/2019 00:00:00');
+INSERT INTO historialpassword VALUES ('tbalbin', 'pass15', '01/01/2019 00:00:00');
+INSERT INTO historialpassword VALUES ('tbalbin', 'pass44', '01/02/2019 00:00:00');
+INSERT INTO historialpassword VALUES ('ucampos', 'pass2', '01/01/2019 00:00:00');
+INSERT INTO historialpassword VALUES ('ucampos', 'pass3', '01/02/2019 00:00:00');
+INSERT INTO historialpassword VALUES ('ucampos', 'pass4', '01/03/2019 00:00:00');
+
