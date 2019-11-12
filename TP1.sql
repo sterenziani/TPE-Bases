@@ -21,23 +21,23 @@ CREATE TABLE ResumenContrato
         PRIMARY KEY(FechaDesde, FechaHasta, DeptoId)
 );
 
--- Al agregar un contrato, revisa que no contradiga las fechas ya establecidas
---CREATE OR REPLACE FUNCTION checkFecha() RETURNS TRIGGER AS $$
---BEGIN
---        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaDesde > t1.fechaDesde AND new.fechaHasta < t1.fechaHasta)))
---                THEN RAISE EXCEPTION 'CONTRACT WITHIN ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP111'; END IF;
---        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaDesde < t1.fechaDesde AND new.fechaHasta > t1.fechaHasta)))
---                THEN RAISE EXCEPTION 'CONTRACT INCLUDES ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP112'; END IF;
---        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaDesde > t1.fechaDesde AND new.fechaDesde < t1.fechaHasta)))
---                THEN RAISE EXCEPTION 'CONTRACT OVERLAPS ENDING OF ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP113'; END IF;
---        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaHasta > t1.fechaDesde AND new.fechaHasta < t1.fechaHasta)))
---                THEN RAISE exception 'CONTRACT OVERLAPS START OF ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP114'; END IF;
---        RETURN new;
---END;
---$$ LANGUAGE plpgsql;
+--Al agregar un contrato, revisa que no contradiga las fechas ya establecidas
+CREATE OR REPLACE FUNCTION checkFecha() RETURNS TRIGGER AS $$
+BEGIN
+        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaDesde > t1.fechaDesde AND new.fechaHasta < t1.fechaHasta)))
+                THEN RAISE EXCEPTION 'CONTRACT WITHIN ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP111'; END IF;
+        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaDesde < t1.fechaDesde AND new.fechaHasta > t1.fechaHasta)))
+                THEN RAISE EXCEPTION 'CONTRACT INCLUDES ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP112'; END IF;
+        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaDesde > t1.fechaDesde AND new.fechaDesde < t1.fechaHasta)))
+                THEN RAISE EXCEPTION 'CONTRACT OVERLAPS ENDING OF ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP113'; END IF;
+        IF EXISTS (SELECT * FROM contrato t1 WHERE (t1.deptoId = new.deptoId AND (new.fechaHasta > t1.fechaDesde AND new.fechaHasta < t1.fechaHasta)))
+                THEN RAISE exception 'CONTRACT OVERLAPS START OF ALREADY CONTRACTED RANGE' USING ERRCODE = 'PP114'; END IF;
+      RETURN new;
+END;
+$$ LANGUAGE plpgsql;
 
---CREATE TRIGGER rangoFechaTrigger BEFORE INSERT OR UPDATE ON contrato
---        FOR EACH ROW EXECUTE PROCEDURE checkFecha();
+CREATE TRIGGER rangoFechaTrigger BEFORE INSERT OR UPDATE ON contrato
+        FOR EACH ROW EXECUTE PROCEDURE checkFecha();
         
 -- Recibe un deptoId como parametro e itera sobre sus alquileres ordenados. Cuando detecta un intervalo sin alquiler, agrega una nueva tupla a ResumenContrato
 CREATE OR REPLACE FUNCTION guardaDepto(PDEPTO contrato.deptoId%TYPE) RETURNS VOID AS $$
@@ -53,7 +53,7 @@ BEGIN
         LOOP
                 FETCH CDEPTO INTO RCDEPTO;
                 EXIT WHEN NOT FOUND;
-                IF RCDEPTO.fechaDesde > HASTAANT THEN
+                IF RCDEPTO.fechaDesde = HASTAANT THEN
                         INSERT INTO ResumenContrato VALUES(DESDEANT, HASTAANT, PDEPTO);
                         DESDEANT := RCDEPTO.fechaDesde;
                         HASTAANT := RCDEPTO.fechaHasta;
@@ -103,7 +103,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Carga los datos de alquileres.csv desde el directorio actual en pampero
-\COPY contrato from 'alquileres.csv' csv header delimiter ','
+\COPY contrato from 'alquileres2.csv' csv header delimiter ','
 
 -------------- PRUEBA ---------------
 
